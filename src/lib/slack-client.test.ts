@@ -127,9 +127,24 @@ describe('SlackClient.updateMessage', () => {
     expect(client.calls).toEqual([
       {
         method: 'chat.update',
-        params: { channel: 'C123', ts: '1234567890.123456', text: 'Corrected message' },
+        params: {
+          channel: 'C123',
+          ts: '1234567890.123456',
+          text: 'Corrected message',
+          parse: 'none',
+        },
       },
     ]);
     expect(response.ts).toBe('1234567890.123456');
+  });
+
+  it('sends parse=none so links survive the edit', async () => {
+    // Without it, `<url|label>` comes back as `&lt;url|label&gt;`: the message
+    // still updates, but every link in it turns into literal text.
+    const client = new TestSlackClient();
+
+    await client.updateMessage('C123', '1234567890.123456', 'see <https://x.dev|docs>');
+
+    expect(client.calls[0]?.params.parse).toBe('none');
   });
 });
