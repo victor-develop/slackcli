@@ -8,27 +8,35 @@ afterEach(() => {
 });
 
 describe('childEnv', () => {
+  // Assert against the values this test planted, never against a serialization
+  // of the whole inherited environment: an unrelated variable on a real machine
+  // can contain the sentinel string (`NOTION_TOKEN=secret_...` is enough), and
+  // when such an assertion fails the runner prints every environment variable
+  // the developer has exported — turning a red test into a credential dump.
   it('removes slackcli token variables', () => {
-    process.env.SLACKCLI_TOKEN = 'xoxb-secret';
-    process.env.SLACKCLI_XOXD = 'xoxd-secret';
-    process.env.SLACKCLI_XOXC = 'xoxc-secret';
+    process.env.SLACKCLI_TOKEN = 'xoxb-planted-token';
+    process.env.SLACKCLI_XOXD = 'xoxd-planted-token';
+    process.env.SLACKCLI_XOXC = 'xoxc-planted-token';
 
     const env = childEnv();
 
     expect(env.SLACKCLI_TOKEN).toBeUndefined();
     expect(env.SLACKCLI_XOXD).toBeUndefined();
     expect(env.SLACKCLI_XOXC).toBeUndefined();
-    expect(JSON.stringify(env)).not.toContain('secret');
+    const values = Object.values(env);
+    expect(values).not.toContain('xoxb-planted-token');
+    expect(values).not.toContain('xoxd-planted-token');
+    expect(values).not.toContain('xoxc-planted-token');
   });
 
   it('removes them regardless of case (Windows env vars are case-insensitive)', () => {
-    process.env.SlackCli_Token = 'xoxb-secret';
+    process.env.SlackCli_Token = 'xoxb-planted-token';
 
-    expect(JSON.stringify(childEnv())).not.toContain('xoxb-secret');
+    expect(Object.values(childEnv())).not.toContain('xoxb-planted-token');
   });
 
   it('preserves everything the helper processes actually need', () => {
-    process.env.SLACKCLI_TOKEN = 'xoxb-secret';
+    process.env.SLACKCLI_TOKEN = 'xoxb-planted-token';
 
     const env = childEnv();
 
@@ -44,10 +52,10 @@ describe('childEnv', () => {
   });
 
   it('does not mutate the parent environment', () => {
-    process.env.SLACKCLI_TOKEN = 'xoxb-secret';
+    process.env.SLACKCLI_TOKEN = 'xoxb-planted-token';
 
     childEnv();
 
-    expect(process.env.SLACKCLI_TOKEN).toBe('xoxb-secret');
+    expect(process.env.SLACKCLI_TOKEN).toBe('xoxb-planted-token');
   });
 });

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0-canopy.1] - 2026-08-14
+
+Fork build (`victor-develop/slackcli`), cut for the canopy skill. Contains
+everything in 0.8.0 plus the security hardening from `asdigitos/slackcli#1`.
+
+### Fixed
+- `messages edit` no longer breaks the links in the message it edits.
+  `chat.update` was called without `parse=none`, so Slack escaped the text and
+  `<url|label>` was stored as `&lt;url|label&gt;` — the message updated, but
+  every link in it turned into literal text. `chat.postMessage` was unaffected
+  because its own `parse` already defaults to none.
+- `childEnv` test no longer asserts on a serialization of the whole inherited
+  environment. An unrelated variable can contain the sentinel string
+  (`NOTION_TOKEN=secret_…` is enough), and when that assertion failed the test
+  runner printed every exported variable — a red test became a credential dump.
+  It now checks only the values the test itself planted.
+
 ## [0.8.0] - 2026-08-06
 
 ### Added
