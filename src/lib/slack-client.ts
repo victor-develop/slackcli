@@ -183,7 +183,13 @@ export class SlackClient {
   }
 
   async updateMessage(channel: string, ts: string, text: string): Promise<any> {
-    return this.request('chat.update', { channel, ts, text });
+    // `parse: 'none'` is required, not cosmetic. Without it chat.update treats
+    // the text the way the client would and HTML-escapes it, so `<url|label>`
+    // is stored as `&lt;url|label&gt;` and the link renders as literal text --
+    // while chat.postMessage, whose parse already defaults to none, keeps the
+    // same string working. Editing a message would silently break every link
+    // in it.
+    return this.request('chat.update', { channel, ts, text, parse: 'none' });
   }
 
   async uploadFileExternal(channel: string, filePath: string, options: {
