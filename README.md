@@ -168,6 +168,7 @@ slackcli messages send --permalink="$LINK" --message="On it 👀"
 | Upload a file with a message | `slackcli messages send --file=./report.pdf …` | [messages](docs/user-guide/messages.md) |
 | Post rich Block Kit content | `slackcli messages send --blocks=@blocks.json …` | [messages](docs/user-guide/messages.md) |
 | Review active drafts | `slackcli messages list-drafts` | [messages](docs/user-guide/messages.md) |
+| React to new messages as they arrive | `slackcli messages listen` | [messages](docs/user-guide/messages.md#messages-listen) |
 | Post a message later | `slackcli messages schedule --in=2h …` | [messages](docs/user-guide/messages.md#messages-schedule) |
 | Script it / feed an AI agent | `… --json \| jq` | [scripting & JSON](docs/user-guide/scripting.md) |
 | Juggle several workspaces | `slackcli conversations list --workspace=automation-bot` | [workspaces](docs/user-guide/workspaces.md) |

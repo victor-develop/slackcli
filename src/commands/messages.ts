@@ -32,6 +32,7 @@ import { resolveMessageText } from '../lib/message-input.ts';
 import { parseScheduleTime } from '../lib/schedule-time.ts';
 import { deleteMessage, removeReaction } from '../lib/message.ts';
 import { resolvePostThread } from '../lib/thread-parent.ts';
+import { connectRtmSocket, parseChannelFilter, runListener } from '../lib/rtm-listener.ts';
 
 // Help text shared by several commands below.
 const THREAD_TS_NOTE =
@@ -191,6 +192,30 @@ const HELP = {
       'Deleting is permanent. A bot token deletes only its own messages; a user or browser session ' +
         'deletes what that user could delete in Slack.',
       'Any other failure (cant_delete_message, channel_not_found, ...) exits 1 with the Slack code in slack_error.',
+    ],
+  },
+  listen: {
+    summary: 'Stream incoming messages as JSON lines',
+    description:
+      'Keep a real-time (RTM) connection to Slack open and print every new message you can see as one ' +
+      'JSON object per line on stdout, until interrupted (Ctrl-C). Reconnects by itself when the ' +
+      'connection drops. Read-only: it never writes to Slack.',
+    examples: [
+      'slackcli messages listen',
+      'slackcli messages listen --channels C0123456789,D0123456789',
+      'slackcli messages listen --workspace acme',
+    ],
+    notes: [
+      'Output is always newline-delimited JSON, one object per line, so a script can read it line by ' +
+        'line while it runs. {"type":"hello"} is printed each time the connection is (re)established: ' +
+        'messages sent while it was down are not replayed, so use it as the cue to catch up with ' +
+        'conversations read or search messages. Every other line is { type: "message", channel, ts, ' +
+        'thread_ts?, user?, username?, bot_id?, subtype?, text, attachments, files }; edits and deletions ' +
+        'arrive as message lines with subtype message_changed or message_deleted.',
+      '--channels takes comma-separated channel or DM IDs (or Slack links) and drops everything else.',
+      'Browser session tokens work. An app token works only for a classic Slack app; other apps get ' +
+        'not_allowed_token_type from Slack and the command exits 1. Auth failures stop the command; ' +
+        'network failures are retried with backoff.',
     ],
   },
   listDrafts: {
@@ -1297,6 +1322,37 @@ export function createMessagesCommand(): Command {
         else success(`Cancelled scheduled message ${id}`);
       } catch (err: any) {
         failCommand(err, { json: options.json, spinner, context: 'Failed to cancel scheduled message' });
+      }
+    });
+
+  describeCommand(messages.command('listen'), HELP.listen)
+    .option('--channels <ids>', 'Only print messages from these channel or DM IDs (comma-separated)')
+    .option('--workspace <id|name>', 'Workspace to use')
+    .action(async (options) => {
+      try {
+        const channels = parseChannelFilter(options.channels);
+        const client = await getAuthenticatedClient(options.workspace);
+        const controller = new AbortController();
+        const stop = () => controller.abort();
+        process.once('SIGINT', stop);
+        process.once('SIGTERM', stop);
+        // The reader went away (e.g. `| head`): stop instead of failing on every write.
+        process.stdout.on('error', stop);
+        process.stderr.write('Listening for messages (Ctrl-C to stop)...\n');
+        try {
+          await runListener({
+            connect: async () => connectRtmSocket(await client.openRtmSession()),
+            emit: (event) => writeText(JSON.stringify(event)),
+            channels,
+            signal: controller.signal,
+          });
+        } finally {
+          process.off('SIGINT', stop);
+          process.off('SIGTERM', stop);
+          process.stdout.off('error', stop);
+        }
+      } catch (err: any) {
+        failCommand(err, { context: 'Failed to listen for messages' });
       }
     });
 

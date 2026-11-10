@@ -88,6 +88,7 @@ messages list-drafts [--limit=100] [--json]                                  # b
 messages schedule --recipient-id=<…> (--message=T | --message-file=F|-) (--at=TIME | --in=DUR) [--thread-ts=TS] [--blocks=JSON|@file] [--json]   # app token only
 messages list-scheduled [--recipient-id=<…>] [--limit=100] [--json]          # app token only
 messages delete-scheduled Q… [--yes] [--json]                                # app token only; cancel
+messages listen [--channels=C…,D…]                                           # stream new messages as JSON lines until Ctrl-C
 ```
 
 `U…`, `@handle` or email recipient opens a DM. Any channel or user argument takes

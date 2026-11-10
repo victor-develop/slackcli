@@ -607,6 +607,46 @@ seconds** before it posts.
 }
 ```
 
+## `messages listen`
+
+Stream new messages as they arrive, one JSON object per line, until you stop it
+(Ctrl-C). It keeps a real-time (RTM) WebSocket open to Slack and reconnects by
+itself when the connection drops. It never writes to Slack.
+
+```bash
+slackcli messages listen
+slackcli messages listen --channels C0123456789,D0123456789
+slackcli messages listen | jq -c 'select(.type == "message")'
+```
+
+Every line is one of:
+
+```json
+{"type":"hello"}
+{"type":"message","channel":"C0123456789","ts":"1700000000.000100","thread_ts":"1700000000.000001","user":"U0123456789","text":"Can you take a look?","attachments":[],"files":[]}
+```
+
+- `hello` is printed every time the connection is established, including after a
+  reconnect. Messages sent while it was down are **not** replayed, so treat
+  `hello` as the cue to catch up with `conversations read` or `search messages`.
+- A `message` line carries `channel`, `ts`, `thread_ts?`, `user?`, `username?`,
+  `bot_id?`, `subtype?`, `text`, `attachments` (their `pretext`, `title`,
+  `text`, `fallback`, `author_name`) and `files` (`id`, `name`, `filetype`).
+  Edits and deletions arrive as message lines with subtype `message_changed` /
+  `message_deleted`.
+- `--channels` takes comma-separated channel or DM IDs, or Slack links to them,
+  and drops every other message.
+
+The output is newline-delimited JSON whether or not stdout is a terminal, which
+is why the command has no `--json` flag. The one status line,
+`Listening for messages...`, goes to stderr.
+
+**Auth.** Browser session tokens work. An app token works only for a classic
+Slack app; other apps get `not_allowed_token_type` from Slack and the command
+exits 1. Authentication failures stop the command; network failures and Slack
+asking to reconnect are retried, waiting 1 s and doubling up to 60 s while
+reconnects keep failing.
+
 ## Related
 
 - [Slack links and timestamps](links-and-timestamps.md) — what `--permalink` accepts

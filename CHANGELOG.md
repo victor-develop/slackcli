@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`messages listen` streams incoming messages in real time**: it keeps a Slack RTM WebSocket open and prints every new message you can see as one JSON object per line, so a script or agent can react within a second or two instead of polling `search messages` or `conversations read`. `{"type":"hello"}` marks every (re)connect as the cue to catch up on anything missed while it was down; `--channels` keeps only the given channels or DMs. Reconnects with capped backoff on drops, Slack's `goodbye` or a silent connection, and stops on auth failures. Browser session tokens work; an app token works only for a classic Slack app. The socket opens with Bun's built-in WebSocket, so no new dependency, and the browser cookie is only sent to a `wss://` Slack host. Read-only (#527)
+
 ## [0.19.1] - 2026-11-07
 
 ### Security

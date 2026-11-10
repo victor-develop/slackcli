@@ -1087,6 +1087,32 @@ export class SlackClient {
     return this.request('conversations.mark', { channel, ts });
   }
 
+  // Ask Slack for a real-time messaging (RTM) socket and return what is needed
+  // to open it. rtm.connect goes through request() like every other call, so it
+  // is rate-limited and auth failures map as usual. App tokens of non-classic
+  // apps get `not_allowed_token_type` from Slack.
+  //
+  // The returned URL carries a one-time ticket: callers must never log it.
+  // Browser sessions also need the `d` cookie on the WebSocket handshake;
+  // `headers` carries it, and is only produced for a wss:// URL on a Slack host
+  // so the cookie never reaches a foreign endpoint.
+  async openRtmSession(): Promise<{ url: string; headers: Record<string, string>; selfId?: string }> {
+    const response = await this.request('rtm.connect', {});
+    let url: URL;
+    try {
+      url = new URL(String(response?.url ?? ''));
+    } catch {
+      throw new Error('rtm.connect returned no socket URL');
+    }
+    if (url.protocol !== 'wss:' || !isSlackHost(url)) {
+      throw new Error('rtm.connect returned a socket URL that is not wss:// on a Slack host');
+    }
+    const headers: Record<string, string> = this.config.auth_type === 'browser'
+      ? { Cookie: `d=${encodeURIComponent(this.config.xoxd_token)}`, Origin: 'https://app.slack.com' }
+      : {};
+    return { url: url.toString(), headers, selfId: response?.self?.id };
+  }
+
   // Get team (workspace) info. team.info works for both auth types. On an
   // enterprise org, an optional team (T-id) scopes the lookup to one workspace;
   // omitted, Slack returns the token's own workspace.
