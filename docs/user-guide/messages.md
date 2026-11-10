@@ -632,8 +632,9 @@ Every line is one of:
 - A `message` line carries `channel`, `ts`, `thread_ts?`, `user?`, `username?`,
   `bot_id?`, `subtype?`, `text`, `attachments` (their `pretext`, `title`,
   `text`, `fallback`, `author_name`) and `files` (`id`, `name`, `filetype`).
-  Edits and deletions arrive as message lines with subtype `message_changed` /
-  `message_deleted`.
+  An edit arrives as a line for the edited message (its own `ts`, the new
+  `text`) with subtype `message_changed`; a deletion as a line with the deleted
+  message's `ts`, empty `text` and subtype `message_deleted`.
 - `--channels` takes comma-separated channel or DM IDs, or Slack links to them,
   and drops every other message.
 
@@ -643,9 +644,17 @@ is why the command has no `--json` flag. The one status line,
 
 **Auth.** Browser session tokens work. An app token works only for a classic
 Slack app; other apps get `not_allowed_token_type` from Slack and the command
-exits 1. Authentication failures stop the command; network failures and Slack
-asking to reconnect are retried, waiting 1 s and doubling up to 60 s while
-reconnects keep failing.
+exits 1.
+
+**Failures and reconnects.** Authentication failures and other answers Slack
+gives with an error stop the command with exit code 1. When stdout is not a
+terminal, that failure is reported as the `--json` error object on stderr (see
+[scripting](scripting.md#errors-under---json)), so a script can read its
+`code`. Network failures, Slack asking to reconnect, and a connection that has
+been silent for about 90 seconds are retried: the first wait is 1 s, doubling on
+each reconnect up to 60 s, and back to 1 s once a connection has stayed up for a
+minute. Ctrl-C, `SIGTERM`, `SIGHUP` (closing the terminal) and the reader of
+stdout going away all stop it cleanly.
 
 ## Related
 

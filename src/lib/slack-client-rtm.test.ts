@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { SlackClient } from './slack-client.ts';
+import { RtmSessionError, SlackClient } from './slack-client.ts';
 import { RateLimiter } from './rate-limiter.ts';
 import type { WorkspaceConfig } from '../types/index.ts';
 
@@ -54,7 +54,6 @@ describe('SlackClient.openRtmSession', () => {
     expect(session).toEqual({
       url: 'wss://wss-primary.slack.com/websocket/abc?ticket=t',
       headers: { Cookie: 'd=xoxd-a%2Fb%2Bc%3D', Origin: 'https://app.slack.com' },
-      selfId: 'U0123456789',
     });
   });
 
@@ -65,7 +64,7 @@ describe('SlackClient.openRtmSession', () => {
     ['a look-alike host', 'wss://slack.com.evil.example/websocket/abc'],
   ])('refuses %s, so the cookie never leaves Slack', async (_label, url) => {
     const { client } = browserClient({ ok: true, url });
-    await expect(client.openRtmSession()).rejects.toThrow('not wss:// on a Slack host');
+    await expect(client.openRtmSession()).rejects.toThrow(RtmSessionError);
   });
 
   it.each([
@@ -73,7 +72,7 @@ describe('SlackClient.openRtmSession', () => {
     ['an unparseable url', { url: 'not a url' }],
   ])('fails clearly when rtm.connect returns %s', async (_label, extra) => {
     const { client } = browserClient({ ok: true, ...extra });
-    await expect(client.openRtmSession()).rejects.toThrow('rtm.connect returned no socket URL');
+    await expect(client.openRtmSession()).rejects.toThrow(new RtmSessionError('rtm.connect returned no socket URL'));
   });
 
   it('sends no handshake headers for an app token', async () => {
@@ -85,7 +84,6 @@ describe('SlackClient.openRtmSession', () => {
     expect(await client.openRtmSession()).toEqual({
       url: 'wss://wss-primary.slack.com/websocket/abc',
       headers: {},
-      selfId: undefined,
     });
   });
 });

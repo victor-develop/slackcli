@@ -215,7 +215,10 @@ const HELP = {
       '--channels takes comma-separated channel or DM IDs (or Slack links) and drops everything else.',
       'Browser session tokens work. An app token works only for a classic Slack app; other apps get ' +
         'not_allowed_token_type from Slack and the command exits 1. Auth failures stop the command; ' +
-        'network failures are retried with backoff.',
+        'network failures are retried, waiting 1 s and doubling up to 60 s. A connection with no frame ' +
+        'from Slack for about 90 s is treated as dead and reopened.',
+      'When stdout is not a terminal, a failure is reported as the --json error object on stderr ' +
+        '(see docs/user-guide/scripting.md), so a script can read its code.',
     ],
   },
   listDrafts: {
@@ -451,6 +454,8 @@ export async function permalinkField(
 function recipientTarget(channelId: string, threadTs: string | undefined): DryRunTarget {
   return { kind: channelId.startsWith('U') ? 'user' : 'channel', id: channelId, thread_ts: threadTs };
 }
+
+const LISTEN_STOP_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
 
 // Warn when a pasted link points at a different workspace than the one we will call,
 // rather than letting Slack answer with a misleading message_not_found.
@@ -1329,30 +1334,42 @@ export function createMessagesCommand(): Command {
     .option('--channels <ids>', 'Only print messages from these channel or DM IDs (comma-separated)')
     .option('--workspace <id|name>', 'Workspace to use')
     .action(async (options) => {
+      // Output is a stream for scripts, so a failure is reported the way a
+      // script can read it (the --json error object) whenever stdout is not a
+      // terminal.
+      const json = !process.stdout.isTTY;
       try {
         const channels = parseChannelFilter(options.channels);
         const client = await getAuthenticatedClient(options.workspace);
+        for (const workspace of channels?.linkWorkspaces ?? []) warnOnWorkspaceMismatch(client, workspace);
+
         const controller = new AbortController();
         const stop = () => controller.abort();
-        process.once('SIGINT', stop);
-        process.once('SIGTERM', stop);
+        // Closing the terminal tab sends SIGHUP; `once`, so a second signal
+        // during shutdown still kills the process the default way.
+        for (const signal of LISTEN_STOP_SIGNALS) process.once(signal, stop);
         // The reader went away (e.g. `| head`): stop instead of failing on every write.
         process.stdout.on('error', stop);
         process.stderr.write('Listening for messages (Ctrl-C to stop)...\n');
         try {
           await runListener({
-            connect: async () => connectRtmSocket(await client.openRtmSession()),
-            emit: (event) => writeText(JSON.stringify(event)),
-            channels,
+            connect: async (signal) => connectRtmSocket(await client.openRtmSession(), { signal }),
+            emit: (event) => {
+              try {
+                writeText(JSON.stringify(event));
+              } catch {
+                stop();
+              }
+            },
+            channels: channels?.ids,
             signal: controller.signal,
           });
         } finally {
-          process.off('SIGINT', stop);
-          process.off('SIGTERM', stop);
+          for (const signal of LISTEN_STOP_SIGNALS) process.off(signal, stop);
           process.stdout.off('error', stop);
         }
       } catch (err: any) {
-        failCommand(err, { context: 'Failed to listen for messages' });
+        failCommand(err, { json, context: 'Failed to listen for messages' });
       }
     });
 

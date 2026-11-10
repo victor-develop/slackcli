@@ -64,6 +64,15 @@ export class SlackTransportError extends Error {
   }
 }
 
+// rtm.connect answered ok but with a socket URL the CLI will not use (missing,
+// unparseable, or not wss:// on a Slack host). Retrying cannot fix it.
+export class RtmSessionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RtmSessionError';
+  }
+}
+
 // files.completeUploadExternal echoes the files it attached. Only the id is
 // relied on, so the shape stays deliberately narrow.
 export interface ExternalUploadCompleteResponse {
@@ -1096,21 +1105,21 @@ export class SlackClient {
   // Browser sessions also need the `d` cookie on the WebSocket handshake;
   // `headers` carries it, and is only produced for a wss:// URL on a Slack host
   // so the cookie never reaches a foreign endpoint.
-  async openRtmSession(): Promise<{ url: string; headers: Record<string, string>; selfId?: string }> {
+  async openRtmSession(): Promise<{ url: string; headers: Record<string, string> }> {
     const response = await this.request('rtm.connect', {});
     let url: URL;
     try {
       url = new URL(String(response?.url ?? ''));
     } catch {
-      throw new Error('rtm.connect returned no socket URL');
+      throw new RtmSessionError('rtm.connect returned no socket URL');
     }
     if (url.protocol !== 'wss:' || !isSlackHost(url)) {
-      throw new Error('rtm.connect returned a socket URL that is not wss:// on a Slack host');
+      throw new RtmSessionError('rtm.connect returned a socket URL that is not wss:// on a Slack host');
     }
     const headers: Record<string, string> = this.config.auth_type === 'browser'
       ? { Cookie: `d=${encodeURIComponent(this.config.xoxd_token)}`, Origin: 'https://app.slack.com' }
       : {};
-    return { url: url.toString(), headers, selfId: response?.self?.id };
+    return { url: url.toString(), headers };
   }
 
   // Get team (workspace) info. team.info works for both auth types. On an
